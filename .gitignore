@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+
+# ECG scans and generated reports contain personal medical data - keep them out of the repo
+*.webp
+*.jpg
+*.jpeg
+*.png
+*.pdf
+raport_ekg.html
