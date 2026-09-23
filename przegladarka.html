@@ -37,6 +37,9 @@ h3{margin:0 0 8px;font-size:1rem}
   border-radius:8px;padding:6px 12px;font:inherit;font-size:.9rem;cursor:pointer;text-decoration:none}
 .btn:hover{border-color:var(--muted)}
 .btn[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.btn-druk{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.btn-druk:hover{opacity:.88}
+.btn-druk svg{width:18px;height:18px;flex:none}
 .ostrz{background:var(--ostrz-bg);color:var(--ostrz-ink);border-radius:10px;padding:10px 14px;margin:14px 0;font-size:.9rem}
 .karta{background:var(--karta);border:1px solid var(--linia);border-radius:12px;padding:16px}
 .werdykt{display:grid;grid-template-columns:minmax(260px,1.3fr) repeat(4,minmax(140px,1fr));gap:12px;margin-bottom:14px}
@@ -129,13 +132,59 @@ td:first-child{font-weight:650;color:var(--ink);white-space:nowrap}
 #dymek b{display:block;margin-bottom:2px}
 #mapa{width:100%;height:auto;display:block}
 #mapa rect{cursor:pointer}
+.nr-druk{font:700 10px system-ui,sans-serif;fill:var(--ink)}
+.tylko-druk,.tylko-druk-i{display:none}
+@media print{.tylko-druk-i{display:inline}}
+
+/* --- wydruk: A4 poziomo, jasne kolory, bez elementów do klikania --- */
+@page{size:A4 landscape;margin:9mm}
+@media print{
+  :root,:root[data-theme="dark"]{
+    color-scheme:light;
+    --bg:#ffffff;--karta:#ffffff;--ink:#000000;--ink2:#333333;--muted:#666666;--linia:#cfcfcf;
+    --papier:#fff6f4;--kr-m:#f2c4c3;--kr-d:#dd8f8d;--krzywa:#000000;
+    --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;
+    --ostrz-bg:#fff4e5;--ostrz-ink:#8a4b00;--ok-bg:#e9f6ec;--ok-ink:#1d6b32;
+  }
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{font-size:11pt}
+  .wrap{max-width:none;padding:0}
+  .pasek,aside,#linkRaportu,.btn-druk,.krzyz,.krzyz-t{display:none!important}
+  .uklad{display:block}
+  .werdykt{grid-template-columns:1.6fr repeat(4,1fr);gap:6px;margin-bottom:8px}
+  .werdykt .glowny{grid-column:auto}
+  .werdykt p{font-size:.8rem;line-height:1.35}
+  .ikona{width:32px;height:32px;font-size:1.1rem}
+  h1{font-size:1.25rem}
+  .gora{margin-bottom:2px}
+  .przewijak svg{max-height:140mm;width:auto;max-width:100%;margin:0 auto}
+  #panel-0 .przewijak svg{max-height:98mm}   /* pierwszy odcinek mieści się pod podsumowaniem */
+  .karta{padding:8px 10px;border-radius:6px}
+  .kafel .w{font-size:1.1rem}
+  .ostrz{margin:6px 0;padding:6px 10px}
+  .przewijak{overflow:visible;border-radius:4px}
+  .przewijak svg{width:100%;height:auto}
+  .panel+.panel{break-before:page}
+  .panel{break-inside:avoid;page-break-inside:avoid;margin-bottom:8px}
+  .tylko-druk{display:block}
+  .nr-druk.tylko-druk,g.tylko-druk{display:inline}
+  #slownik{break-before:page}
+  #druk{break-before:page}
+}
+#druk h2{font-size:1.2rem;margin:0 0 8px}
+#druk table td{font-size:.85rem;padding:5px 6px}
+#druk table td:first-child{white-space:nowrap}
+.legenda-druk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.legenda-druk div{border:1px solid var(--linia);border-radius:6px;padding:6px 8px;font-size:.85rem;color:var(--ink2)}
+.legenda-druk b{color:var(--ink)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="gora">
     <div><h1>Przeglądarka EKG</h1><p class="sub">__PLIKI__</p></div>
-    <div class="grupa"><a id="linkRaportu" class="btn" hidden>Pełny raport z objaśnieniami ↗</a></div>
+    <div class="grupa"><button class="btn btn-druk" id="drukBtn" title="Drukuj"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Drukuj / zapisz jako PDF</button>
+      <a id="linkRaportu" class="btn" hidden>Pełny raport z objaśnieniami ↗</a></div>
   </div>
   <div class="ostrz"><b>Narzędzie edukacyjne, nie diagnoza.</b> Program odczytuje wykres ze zdjęcia i może się mylić.
     Ocenę zawsze robi lekarz. Przy duszności, bólu w klatce piersiowej albo omdleniu dzwoń pod 112.</div>
@@ -151,6 +200,7 @@ td:first-child{font-weight:650;color:var(--ink);white-space:nowrap}
     </div>
     <div class="grupa" id="warstwy"><span class="et">Pokaż na wykresie</span></div>
     <div class="grupa"><button class="btn" id="skanBtn" aria-pressed="false">Pokaż oryginalny skan pod spodem</button></div>
+    <div class="grupa" style="margin-left:auto"><button class="btn btn-druk" id="drukBtn2" title="Drukuj" aria-label="Drukuj"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Drukuj</button></div>
   </div>
 
   <div class="uklad">
@@ -165,6 +215,7 @@ td:first-child{font-weight:650;color:var(--ink);white-space:nowrap}
     </aside>
   </div>
 
+  <section class="tylko-druk" id="druk"></section>
   <details class="karta" id="slownik" style="margin-top:6px"><summary>Słowniczek: co oznaczają symbole i napisy z wydruku</summary><table></table></details>
 </div>
 <div id="dymek" role="tooltip"></div>
@@ -209,6 +260,7 @@ A.forEach(a => {
   if (a.typ === "faleF") faleF[a.okno + "|" + a.lead] = a;
 });
 const polowa = i => D.okna[i].kolumna === 0 ? "lewa połowa" : "prawa połowa";
+const nr = a => A.indexOf(a) + 1;   // stały numer anomalii - ten sam na wykresie i na liście (ważne na wydruku)
 
 // ---------- nagłówek z wynikiem ----------
 function werdykt(){
@@ -339,7 +391,8 @@ function panel(ok, i, pxs, kont){
            `<path d="M${x0} ${yl - 5}V${yl + 5}M${x1} ${yl - 5}V${yl + 5}"/><line x1="${x0}" x2="${x1}" y1="${yl}" y2="${yl}"/>` +
            (x1 - x0 > 46 ? `<text class="w1" x="${xm}" y="${yl - 18}" text-anchor="middle">${fmt(rr)} s</text>` +
                            `<text x="${xm}" y="${yl - 6}" text-anchor="middle">${bpm}/min</text>` : "") +
-           (szyb ? `<g class="w-szybkie"><circle class="odzn-szybki" cx="${xm}" cy="${yl + 11}" r="7"/><text class="odzn-t" x="${xm}" y="${yl + 14.5}" text-anchor="middle">»</text></g>` : "") +
+           (szyb ? `<g class="w-szybkie"><circle class="odzn-szybki" cx="${x1 - 9}" cy="${yl + 11}" r="7"/><text class="odzn-t" x="${x1 - 9}" y="${yl + 14.5}" text-anchor="middle">»</text></g>` : "") +
+           (lista.length ? `<text class="nr-druk tylko-druk" x="${x0 + 3}" y="${yl + 15}">${lista.map(nr).join(", ")}</text>` : "") +
            `</g>`);
   }
 
@@ -354,7 +407,10 @@ function panel(ok, i, pxs, kont){
   const div = document.createElement("section");
   div.className = "panel"; div.id = "panel-" + i;
   div.innerHTML = `<div class="panel-nagl"><b>Odcinek ${i + 1}: ${esc(ok.nazwa)}</b>` +
-    `<span>${esc(ok.plik)}, ${polowa(i)} · ${fmt(ok.t1 - ok.t0, 1)} s zapisu · ${ud.length} uderzeń</span></div>` +
+    `<span>${esc(ok.plik)}, ${polowa(i)} · ${fmt(ok.t1 - ok.t0, 1)} s zapisu · ${ud.length} uderzeń` +
+    (() => { const n = A.filter(a => a.okno === i).map(nr);
+             return n.length ? `<span class="tylko-druk-i"> · anomalie nr ${n[0]}–${n[n.length - 1]}</span>` : ""; })() +
+    `</span></div>` +
     `<div class="przewijak">${s.join("")}</div>`;
   kont.appendChild(div);
   const svg = div.querySelector("svg");
@@ -588,7 +644,51 @@ function pasek(){
   document.querySelector("#slownik table").innerHTML = D.slownik.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
 }
 
-werdykt(); pasek(); rysuj(); lista(); mapa(); domyslneSzczegoly();
+// ---------- wydruk ----------
+const ZNACZENIE = {
+  nierowny: ["pomarańczowe pole + pomarańczowa klamra", "kolejne uderzenie przyszło wyraźnie wcześniej albo później niż poprzednie; ciągłe takie skoki to główny znak migotania"],
+  szybki: ["żółte kółko » pod klamrą", "między dwoma uderzeniami minęło tak mało czasu, że odpowiada to tętnu powyżej 120/min"],
+  pauza: ["pomarańczowe pole", "odstęp o połowę dłuższy od średniej"],
+  brakP: ["zielone zakreskowane pola przed uderzeniami", "tu powinien być mały garb P (skurcz przedsionków); jego brak = przedsionki nie kurczą się normalnie"],
+  faleF: ["różowe trójkąciki nad linią", "drobne fale między uderzeniami = przedsionki drgają zamiast się kurczyć"],
+};
+function sekcjaDruku(){
+  const leg = ["nierowny", "szybki", "brakP", "faleF"].map(t => {
+    const T = TYPY[t], [wyg, zn] = ZNACZENIE[t];
+    return `<div><span class="zn" style="--c:${T.kolor}">${T.ikona}</span> <b>${T.nazwa}</b><br>Na wykresie: ${wyg}.<br>Znaczenie: ${zn}.<br><i>Normalnie:</i> ${T.normalnie}</div>`;
+  }).join("") +
+  `<div><span class="zn" style="--c:var(--s1)">●</span> <b>Uderzenie serca (QRS)</b><br>Niebieskie kółko i numer nad wykresem. Każde to jeden skurcz komór, czyli jedno uderzenie wyczuwalne na tętnie.</div>` +
+  `<div><b>Liczby nad klamrami</b><br>Czas między dwoma uderzeniami (s) i odpowiadające mu tętno (/min). Mała pogrubiona liczba pod klamrą = numer anomalii z tabeli poniżej.</div>`;
+  const wiersze = A.map(a => {
+    const T = TYPY[a.typ];
+    let gdzie = "cały zapis";
+    if (a.okno != null) {
+      gdzie = `odcinek ${a.okno + 1} (${esc(D.okna[a.okno].nazwa)})`;
+      if (a.t0 != null) gdzie += `, ${fmt(a.t0)}–${fmt(a.t1)} s`;
+      if (a.lead) gdzie += `, odpr. ${esc(a.lead)}`;
+    }
+    return `<tr><td>${nr(a)}</td><td><span class="zn" style="--c:${T.kolor}">${T.ikona}</span> ${T.nazwa}</td><td>${esc(a.tytul)}</td><td>${gdzie}</td></tr>`;
+  }).join("");
+  document.getElementById("druk").innerHTML =
+    `<h2>Jak czytać zaznaczenia</h2><div class="legenda-druk">${leg}</div>` +
+    `<h2>Lista znalezionych anomalii (${A.length})</h2>` +
+    `<table><tr><td><b>Nr</b></td><td><b>Rodzaj</b></td><td><b>Co</b></td><td><b>Gdzie</b></td></tr>${wiersze}</table>`;
+}
+let przedDrukiem = null;
+addEventListener("beforeprint", () => {
+  przedDrukiem = {zoom:stan.zoom, slownik:document.getElementById("slownik").open};
+  document.getElementById("slownik").open = true;
+  if (stan.zoom !== 1) { stan.zoom = 1; document.getElementById("zoom").value = 1; rysuj(); }
+});
+addEventListener("afterprint", () => {
+  if (!przedDrukiem) return;
+  document.getElementById("slownik").open = przedDrukiem.slownik;
+  if (przedDrukiem.zoom !== 1) { stan.zoom = przedDrukiem.zoom; document.getElementById("zoom").value = stan.zoom; rysuj(); }
+  przedDrukiem = null;
+});
+document.querySelectorAll(".btn-druk").forEach(b => b.onclick = () => window.print());
+
+werdykt(); pasek(); rysuj(); lista(); mapa(); domyslneSzczegoly(); sekcjaDruku();
 let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(rysuj, 150); });
 })();
 </script>

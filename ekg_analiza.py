@@ -11,6 +11,8 @@ Domyślnie zakłada wydruk 3 wiersze x 2 kolumny (np. AsCARD):
 """
 import argparse
 import os
+import shutil
+import subprocess
 import sys
 import webbrowser
 
@@ -23,6 +25,32 @@ DOMYSLNE = [
     "I,II,III,aVR,aVL,aVF",
     "V1,V2,V3,V4,V5,V6",
 ]
+
+KANDYDACI_PRZEGLADARKI = [
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    "msedge", "google-chrome", "chromium", "chromium-browser", "chrome",
+]
+
+
+def zapisz_pdf(html, pdf):
+    """Drukuje przeglądarkę EKG do PDF (A4 poziomo) przy użyciu Edge/Chrome bez okna."""
+    for k in KANDYDACI_PRZEGLADARKI:
+        exe = k if os.path.isfile(k) else shutil.which(k)
+        if not exe:
+            continue
+        url = "file:///" + os.path.abspath(html).replace(os.sep, "/")
+        try:
+            subprocess.run([exe, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
+                            "--virtual-time-budget=5000", f"--print-to-pdf={os.path.abspath(pdf)}", url],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if os.path.isfile(pdf) and os.path.getsize(pdf) > 0:
+            return True
+    return False
 
 
 def main():
@@ -54,6 +82,9 @@ def main():
     sciezka_przegladarki = os.path.join(folder, "przegladarka_ekg.html")
     raport.generuj(wydruki, wynik, sciezka_raportu)
     przegladarka.generuj(wydruki, wynik, sciezka_przegladarki, link_raportu="raport_ekg.html")
+    sciezka_pdf = os.path.join(folder, "ekg_do_druku.pdf")
+    print("Przygotowuję PDF do druku ...")
+    pdf_ok = zapisz_pdf(sciezka_przegladarki, sciezka_pdf)
 
     print()
     print(f"  Średnie tętno:        {wynik.tetno:.0f}/min")
@@ -64,6 +95,10 @@ def main():
     print()
     print(f"Przeglądarka wykresu: {sciezka_przegladarki}")
     print(f"Raport z objaśnieniami: {sciezka_raportu}")
+    if pdf_ok:
+        print(f"Do druku (PDF):       {sciezka_pdf}")
+    else:
+        print("PDF nie powstał (brak Edge/Chrome) - drukuj z przeglądarki przyciskiem 'Drukuj'.")
     print("To narzędzie edukacyjne - nie zastępuje oceny lekarza.")
     if not args.nie_otwieraj:
         webbrowser.open("file:///" + sciezka_przegladarki.replace(os.sep, "/"))

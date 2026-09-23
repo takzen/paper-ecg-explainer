@@ -49,8 +49,11 @@ Other layouts can be named explicitly:
 python ekg_analiza.py scan.jpg --odprowadzenia "I,II,III,aVR,aVL,aVF" -o results_folder
 ```
 
-Both HTML files are saved next to the first scan (or into the folder given with `-o`) and the viewer
-opens in the browser automatically (`--nie-otwieraj` disables that).
+Both HTML files and a print-ready PDF (`ekg_do_druku.pdf`, A4 landscape: summary, one page per
+segment with numbered anomalies, legend, anomaly table and glossary) are saved next to the first scan
+(or into the folder given with `-o`). The viewer opens in the browser automatically
+(`--nie-otwieraj` disables that) and has a print button producing the same layout.
+The PDF is rendered with a local Edge/Chrome in headless mode.
 
 ## Project layout
 
