@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ECG Viewer</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f7f6f3;--card:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8883;--line:#e4e2dc;
+  --paper:#fff6f4;--grid-minor:#f5d0cf;--grid-major:#e6a3a1;--trace:#141414;
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;
+  --warn-bg:#fff4e5;--warn-ink:#8a4b00;--ok-bg:#e9f6ec;--ok-ink:#1d6b32;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#141413;--card:#1f1f1d;--ink:#f4f3ee;--ink2:#c3c2b7;--muted:#9a988f;--line:#34332f;
+  --paper:#1e1a1a;--grid-minor:#352626;--grid-major:#5b3a3a;--trace:#f2f0ea;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#2a9a2a;
+  --warn-bg:#3a2a12;--warn-ink:#ffcf8a;--ok-bg:#16301d;--ok-ink:#9fe0b0;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#141413;--card:#1f1f1d;--ink:#f4f3ee;--ink2:#c3c2b7;--muted:#9a988f;--line:#34332f;
+  --paper:#1e1a1a;--grid-minor:#352626;--grid-major:#5b3a3a;--trace:#f2f0ea;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#2a9a2a;
+  --warn-bg:#3a2a12;--warn-ink:#ffcf8a;--ok-bg:#16301d;--ok-ink:#9fe0b0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:1.6rem;margin:0}
+h3{margin:0 0 8px;font-size:1rem}
+.sub{color:var(--muted);margin:2px 0 0;font-size:.9rem}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+  border-radius:8px;padding:6px 12px;font:inherit;font-size:.9rem;cursor:pointer;text-decoration:none}
+.btn:hover{border-color:var(--muted)}
+.btn[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.btn-print{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}
+.btn-print:hover{opacity:.88}
+.btn-print svg{width:18px;height:18px;flex:none}
+.lang{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.lang button{border:0;background:var(--card);color:var(--ink2);font:inherit;font-size:.85rem;font-weight:600;padding:6px 10px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.warning{background:var(--warn-bg);color:var(--warn-ink);border-radius:10px;padding:10px 14px;margin:14px 0;font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.verdict{display:grid;grid-template-columns:minmax(260px,1.3fr) repeat(4,minmax(140px,1fr));gap:12px;margin-bottom:14px}
+.verdict .main{display:flex;gap:12px}
+.icon{font-size:1.5rem;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:none;
+  background:var(--warn-bg);color:var(--warn-ink)}
+.icon.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.verdict p{margin:0;color:var(--ink2);font-size:.9rem}
+.tile .label{font-size:.8rem;color:var(--muted)}
+.tile .value{font-size:1.45rem;font-weight:650;line-height:1.2;margin:2px 0}
+.tile .note{font-size:.8rem;color:var(--ink2)}
+@media (max-width:1000px){.verdict{grid-template-columns:1fr 1fr}.verdict .main{grid-column:1/-1}}
+
+.toolbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
+  border-bottom:1px solid var(--line);margin-bottom:14px}
+.group{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.group>.caption{font-size:.8rem;color:var(--muted);margin-right:2px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:999px;
+  padding:4px 10px 4px 6px;font:inherit;font-size:.85rem;color:var(--ink);cursor:pointer}
+.chip[aria-pressed="false"]{opacity:.45}
+.chip[aria-pressed="false"] .badge{filter:grayscale(1)}
+.badge{width:20px;height:20px;border-radius:50%;display:inline-grid;place-items:center;font-size:.72rem;font-weight:700;color:#fff;background:var(--c)}
+input[type=range]{width:120px}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+@media (max-width:1100px){.layout{grid-template-columns:1fr}}
+.panel{margin-bottom:18px}
+.panel-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline;margin:0 2px 6px}
+.panel-head b{font-size:1rem}
+.panel-head span{color:var(--muted);font-size:.85rem}
+.scroller{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.scroller svg{display:block;user-select:none}
+.panel.selected .scroller{border-color:var(--ink)}
+
+aside{position:sticky;top:64px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 80px);overflow:auto}
+@media (max-width:1100px){aside{position:static;max-height:none}}
+#details .kind{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--ink2);margin-bottom:6px}
+#details h3{font-size:1.1rem}
+#details p{margin:6px 0;color:var(--ink2);font-size:.92rem}
+#details .where{color:var(--muted);font-size:.85rem}
+#details .normal{border-left:3px solid var(--s3);padding-left:10px}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:.85rem;color:var(--muted)}
+#list{list-style:none;margin:0;padding:0}
+#list .group-title{font-size:.78rem;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+#list li.item{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:.88rem;color:var(--ink2)}
+#list li.item:hover{background:var(--bg)}
+#list li.item.active{background:var(--bg);color:var(--ink);box-shadow:inset 3px 0 0 var(--ink)}
+.small{font-size:.8rem;color:var(--muted);margin:6px 0 0}
+details summary{cursor:pointer;font-weight:600}
+table{border-collapse:collapse;width:100%;margin-top:10px}
+td{border-top:1px solid var(--line);padding:8px;vertical-align:top;color:var(--ink2);font-size:.9rem}
+td:first-child{font-weight:650;color:var(--ink);white-space:nowrap}
+
+/* --- SVG --- */
+.grid-minor{stroke:var(--grid-minor);stroke-width:.6;fill:none}
+.grid-major{stroke:var(--grid-major);stroke-width:1;fill:none}
+.paper-bg{fill:var(--paper)}
+.trace{fill:none;stroke:var(--trace);stroke-width:1.5;stroke-linejoin:round}
+.scan-on .trace{stroke:var(--s1);stroke-width:1.4;opacity:.8}
+.scan{display:none}
+.scan-on .scan{display:inline}
+.lead-label{font:600 13px system-ui,sans-serif;fill:var(--ink)}
+.lead-label-bg{fill:var(--card);opacity:.92}
+.beat-line{stroke:var(--s1);stroke-width:1;stroke-dasharray:3 4;opacity:.55}
+.beat-circle{fill:none;stroke:var(--s1);stroke-width:2.2;cursor:pointer}
+.beat-no{font:600 10px system-ui,sans-serif;fill:var(--s1)}
+.rr line,.rr path{stroke:var(--muted);stroke-width:1.2;fill:none}
+.rr text{font:11px system-ui,sans-serif;fill:var(--ink2)}
+.rr.irregular line,.rr.irregular path{stroke:var(--s2);stroke-width:2}
+.rr.irregular text.l1{fill:var(--ink);font-weight:650}
+.rr{cursor:pointer}
+.rr .hit{fill:transparent;stroke:none}
+.band{fill:var(--s2);opacity:.09;cursor:pointer}
+.short-badge{fill:var(--s4)}
+.badge-text{font:700 10px system-ui,sans-serif;fill:#fff;pointer-events:none}
+.p-zone{cursor:pointer}
+.hatch{stroke:var(--s3);stroke-width:1.6}
+.p-zone rect.outline{fill:none;stroke:var(--s3);stroke-width:1;stroke-dasharray:2 3}
+.f-mark{fill:var(--s5);stroke:var(--card);stroke-width:1;cursor:pointer}
+.cursor{stroke:var(--ink);stroke-width:1;opacity:.35;pointer-events:none}
+.cursor-text{font:11px system-ui,sans-serif;fill:var(--ink);pointer-events:none}
+.picked.band{opacity:.28}
+.picked.rr line,.picked.rr path{stroke-width:3.2}
+.picked.p-zone rect.outline{stroke-width:2.4;stroke-dasharray:none}
+.picked.f-mark{stroke:var(--ink);stroke-width:2}
+.hide-irregular .l-irregular,.hide-short .l-short,.hide-noP .l-noP,.hide-fWaves .l-fWaves,.hide-beats .l-beats{display:none}
+
+#tooltip{position:fixed;z-index:20;pointer-events:none;max-width:320px;background:var(--card);color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;font-size:.85rem;box-shadow:0 6px 24px rgba(0,0,0,.18);display:none}
+#tooltip b{display:block;margin-bottom:2px}
+#rrmap{width:100%;height:auto;display:block}
+#rrmap rect{cursor:pointer}
+.print-no{font:700 10px system-ui,sans-serif;fill:var(--ink)}
+.print-only,.print-only-inline{display:none}
+#print-section h2{font-size:1.2rem;margin:0 0 8px}
+#print-section table td{font-size:.85rem;padding:5px 6px}
+#print-section table td:first-child{white-space:nowrap}
+.print-legend{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.print-legend div{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:.85rem;color:var(--ink2)}
+.print-legend b{color:var(--ink)}
+
+/* --- print: A4 landscape, light colors, no interactive controls --- */
+@page{size:A4 landscape;margin:9mm}
+@media print{
+  :root,:root[data-theme="dark"]{
+    color-scheme:light;
+    --bg:#ffffff;--card:#ffffff;--ink:#000000;--ink2:#333333;--muted:#666666;--line:#cfcfcf;
+    --paper:#fff6f4;--grid-minor:#f2c4c3;--grid-major:#dd8f8d;--trace:#000000;
+    --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;
+    --warn-bg:#fff4e5;--warn-ink:#8a4b00;--ok-bg:#e9f6ec;--ok-ink:#1d6b32;
+  }
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{font-size:11pt}
+  .wrap{max-width:none;padding:0}
+  .toolbar,aside,#reportLink,.btn-print,.lang,.cursor,.cursor-text{display:none!important}
+  .layout{display:block}
+  .verdict{grid-template-columns:1.6fr repeat(4,1fr);gap:6px;margin-bottom:8px}
+  .verdict .main{grid-column:auto}
+  .verdict p{font-size:.8rem;line-height:1.35}
+  .icon{width:32px;height:32px;font-size:1.1rem}
+  h1{font-size:1.25rem}
+  .card{padding:8px 10px;border-radius:6px}
+  .tile .value{font-size:1.1rem}
+  .warning{margin:6px 0;padding:6px 10px}
+  .scroller{overflow:visible;border-radius:4px}
+  .scroller svg{max-height:140mm;width:auto;max-width:100%;margin:0 auto;height:auto}
+  #panel-0 .scroller svg{max-height:98mm}   /* first segment fits under the summary */
+  .panel{break-inside:avoid;page-break-inside:avoid;margin-bottom:8px}
+  .panel+.panel{break-before:page}
+  .print-only{display:block}
+  .print-only-inline{display:inline}
+  .print-no.print-only{display:inline}
+  #glossary{break-before:page}
+  #print-section{break-before:page}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1 data-i18n="title"></h1><p class="sub">__FILES__</p></div>
+    <div class="group">
+      <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="pl">PL</button></div>
+      <button class="btn btn-print" id="printBtn">__PRINT_ICON__ <span data-i18n="print_pdf"></span></button>
+      <a id="reportLink" class="btn" hidden><span data-i18n="full_report"></span> ↗</a>
+    </div>
+  </div>
+  <div class="warning" data-i18n-html="warning"></div>
+
+  <section class="verdict" id="verdict"></section>
+
+  <div class="toolbar">
+    <div class="group"><span class="caption" data-i18n="zoom"></span>
+      <button class="btn" id="zoomOut">−</button>
+      <input type="range" id="zoom" min="1" max="6" step="0.25" value="1">
+      <button class="btn" id="zoomIn">+</button>
+      <button class="btn" id="zoomFit" data-i18n="fit"></button>
+    </div>
+    <div class="group" id="layers"><span class="caption" data-i18n="show_on_chart"></span></div>
+    <div class="group"><button class="btn" id="scanBtn" aria-pressed="false" data-i18n="show_scan"></button></div>
+    <div class="group" style="margin-left:auto"><button class="btn btn-print" id="printBtn2">__PRINT_ICON__ <span data-i18n="print"></span></button></div>
+  </div>
+
+  <div class="layout">
+    <main id="charts"></main>
+    <aside>
+      <div class="card" id="details"></div>
+      <div class="card"><h3 data-i18n="rr_map"></h3>
+        <svg id="rrmap" viewBox="0 0 320 120"></svg>
+        <p class="small" data-i18n="rr_map_note"></p></div>
+      <div class="card"><h3><span data-i18n="found"></span> <span id="count" class="sub"></span></h3><ol id="list"></ol></div>
+    </aside>
+  </div>
+
+  <section class="print-only" id="print-section"></section>
+  <details class="card" id="glossary" style="margin-top:6px"><summary data-i18n="glossary"></summary><table></table></details>
+</div>
+<div id="tooltip" role="tooltip"></div>
+
+<script>const D = /*__DATA__*/null;</script>
+<script>
+(function(){
+// ---------- UI strings ----------
+const I18N = {
+  en: {
+    title:"ECG Viewer", print_pdf:"Print / save as PDF", print:"Print", full_report:"Full report with explanations",
+    warning:"<b>Educational tool, not a diagnosis.</b> The program reads the chart from a photo and can be wrong. An ECG is always assessed by a doctor. With shortness of breath, chest pain or fainting call 112 (or your local emergency number).",
+    zoom:"Zoom", fit:"Fit", show_on_chart:"Show on chart", show_scan:"Show the original scan underneath",
+    rr_map:"Map of intervals between beats",
+    rr_map_note:"Each bar is one interval. With a healthy rhythm the bars would be almost equal. Orange ones suddenly changed length. Click a bar to show it on the chart.",
+    found:"Anomalies found", glossary:"Glossary: what the symbols and labels on the printout mean",
+    t_rate:"Mean heart rate", t_rate_n:"normal at rest: 60–100/min",
+    t_irr:"Irregular intervals", t_irr_of:"of", t_irr_n:(a,b)=>`intervals from ${a} s to ${b} s`,
+    t_p:"P waves", t_p_n:k=>`similarity ${k} (normal > 0.6)`, t_f:"f waves",
+    segment:"Segment", left:"left half", right:"right half", s_of_rec:"s of recording", beats:"beats", anomalies_no:"anomalies no.",
+    whole:"Whole recording", applies_whole:"Applies to the whole recording", from:"from", to:"to", lead:"lead",
+    prev:"← Previous", next:"Next →", normally:"What normal looks like:", first:"Show the first anomaly →",
+    beat_title:"Heartbeat", beat_no:k=>`Beat no. ${k}`, time:"time",
+    beat_h:(k,o)=>`Beat no. ${k} in segment ${o}`,
+    beat_text:"A tall, sharp spike is the <b>QRS complex</b>, the moment the ventricles contract. Each spike is one beat you feel as your pulse. In some leads (e.g. aVR, V1) the spike points down. That is normal and depends on which side the electrode “looks” at the heart from.",
+    beat_hint:"<b>What to look at:</b> how much time passes until the next beat (bracket above the chart) and whether there is a small P bump before the spike.",
+    rr_title:"Interval between beats", rr_between:(o,a,b)=>`Segment ${o}, between beat ${a} and ${b}`,
+    rr_text:m=>`This interval does not differ clearly from the previous one, so the program did not flag it. The mean interval in the whole recording is ${m} s.`,
+    rr_similar:"Similar to the previous one, no sudden change.", interval:"Interval",
+    how_title:"How to read this chart",
+    how:"<p>Each segment is a few seconds of recording. Each strip in it is one lead, a “view” of the heart from a different side. All strips in a segment were recorded at the same time.</p><p><b style=\"color:var(--s1)\">Blue circles and numbers</b> are consecutive heartbeats. <b>Brackets above the chart</b> show how much time passed between beats.</p><p><b>Click</b> any marker on the chart or an item in the list below and the explanation appears here. The ← → keys step through the anomalies.</p>",
+    p_zone_tip:"A P wave should be here|In a normal rhythm this spot (0.06–0.30 s before the beat) holds a small P bump. It is missing here.",
+    f_tip:"f wave|Fine undulation between beats = the atria quiver instead of contracting.",
+    map_tip:(o,k)=>`Segment ${o}, interval ${k}`, sudden:" · sudden change", mean:"mean",
+    where_find:{irregular:"On the chart: orange area and orange bracket above the chart.", pause:"On the chart: orange area and bracket above the chart.",
+      short:"On the chart: yellow » circle under the interval bracket.", noP:"On the chart: green hatched areas before every beat (in leads II, III, aVF, V1).",
+      fWaves:"On the chart: pink triangles above the small waves between beats.", rate:"On the chart: the numbers above the brackets show the pace of each interval (beats per minute)."},
+    legend_h:"How to read the markers", table_h:n=>`List of anomalies found (${n})`, col_no:"No.", col_kind:"Kind", col_what:"What", col_where:"Where",
+    on_chart:"On the chart", meaning:"Meaning", normally_i:"Normally",
+    legend_beat:"<b>Heartbeat (QRS)</b><br>Blue circle and number above the chart. Each is one contraction of the ventricles, one beat felt as the pulse.",
+    legend_nums:"<b>Numbers above the brackets</b><br>Time between two beats (s) and the matching heart rate (/min). The small bold number under a bracket = anomaly number from the table below.",
+    seg_short:"segment", whole_short:"whole recording",
+    types:{
+      irregular:["Irregular interval","Normally consecutive intervals differ by less than 0.05–0.1 s, because the heart beats almost like a metronome."],
+      noP:["Missing P wave","Normally 0.12–0.20 s before every tall spike (QRS) there is a small rounded P bump that looks the same every time."],
+      short:["Very short interval","At rest the interval between beats is usually 0.6–1.0 s (60–100 beats per minute)."],
+      fWaves:["f waves (atrial quivering)","Normally the line between the end of the T bump and the next P is almost flat."],
+      pause:["Longer pause","In a normal rhythm the pauses between beats are of similar length."],
+      rate:["Fast heart rate","Normal at rest is 60–100 beats per minute."]},
+    layers:{beats:"Beats (QRS)", irregular:"Irregular intervals", noP:"Missing P wave", short:"Very short intervals", fWaves:"f waves"},
+    legend:{irregular:["orange area + orange bracket","the next beat came clearly earlier or later than the previous one; constant jumps like this are the main sign of fibrillation"],
+      short:["yellow » circle under the bracket","so little time passed between two beats that it matches a heart rate above 120/min"],
+      noP:["green hatched areas before the beats","a small P bump (atrial contraction) should be here; its absence = the atria are not contracting normally"],
+      fWaves:["pink triangles above the line","fine waves between beats = the atria quiver instead of contracting"]},
+  },
+  pl: {
+    title:"Przeglądarka EKG", print_pdf:"Drukuj / zapisz jako PDF", print:"Drukuj", full_report:"Pełny raport z objaśnieniami",
+    warning:"<b>Narzędzie edukacyjne, nie diagnoza.</b> Program odczytuje wykres ze zdjęcia i może się mylić. Ocenę zawsze robi lekarz. Przy duszności, bólu w klatce piersiowej albo omdleniu dzwoń pod 112.",
+    zoom:"Powiększenie", fit:"Dopasuj", show_on_chart:"Pokaż na wykresie", show_scan:"Pokaż oryginalny skan pod spodem",
+    rr_map:"Mapa odstępów między uderzeniami",
+    rr_map_note:"Każdy słupek to jeden odstęp. Przy zdrowym rytmie słupki byłyby prawie równe. Pomarańczowe to odstępy, które nagle zmieniły długość. Kliknij słupek, żeby pokazać go na wykresie.",
+    found:"Znalezione anomalie", glossary:"Słowniczek: co oznaczają symbole i napisy z wydruku",
+    t_rate:"Średnie tętno", t_rate_n:"norma w spoczynku: 60–100/min",
+    t_irr:"Nierówne odstępy", t_irr_of:"z", t_irr_n:(a,b)=>`odstępy od ${a} s do ${b} s`,
+    t_p:"Załamki P", t_p_n:k=>`podobieństwo ${k} (norma > 0,6)`, t_f:"Fale f",
+    segment:"Odcinek", left:"lewa połowa", right:"prawa połowa", s_of_rec:"s zapisu", beats:"uderzeń", anomalies_no:"anomalie nr",
+    whole:"Cały zapis", applies_whole:"Dotyczy całego zapisu", from:"od", to:"do", lead:"odprowadzenie",
+    prev:"← Poprzednia", next:"Następna →", normally:"Jak jest normalnie:", first:"Pokaż pierwszą anomalię →",
+    beat_title:"Uderzenie serca", beat_no:k=>`Uderzenie nr ${k}`, time:"czas",
+    beat_h:(k,o)=>`Uderzenie nr ${k} w odcinku ${o}`,
+    beat_text:"Wysoki, ostry szpic to <b>zespół QRS</b>, czyli moment skurczu komór. Każdy taki szpic to jedno uderzenie, które czujesz na tętnie. W niektórych odprowadzeniach (np. aVR, V1) szpic jest skierowany w dół. To normalne, bo zależy od tego, z której strony elektroda „patrzy” na serce.",
+    beat_hint:"<b>Na co patrzeć:</b> ile czasu mija do następnego uderzenia (klamra nad wykresem) i czy przed szpicem jest mały garb P.",
+    rr_title:"Odstęp między uderzeniami", rr_between:(o,a,b)=>`Odcinek ${o}, między uderzeniem ${a} a ${b}`,
+    rr_text:m=>`Ten odstęp nie różni się wyraźnie od poprzedniego, więc program go nie zaznaczył. Średni odstęp w całym zapisie wynosi ${m} s.`,
+    rr_similar:"Podobny do poprzedniego, bez gwałtownej zmiany.", interval:"Odstęp",
+    how_title:"Jak czytać ten wykres",
+    how:"<p>Każdy odcinek to kilka sekund zapisu. Każdy pasek w nim to jedno odprowadzenie, czyli „widok” na serce z innej strony. Wszystkie paski w jednym odcinku nagrano w tym samym czasie.</p><p><b style=\"color:var(--s1)\">Niebieskie kółka i numery</b> to kolejne uderzenia serca. <b>Klamry nad wykresem</b> pokazują, ile czasu minęło między uderzeniami.</p><p><b>Kliknij</b> dowolne zaznaczenie na wykresie albo pozycję z listy poniżej, a tu pojawi się wyjaśnienie. Strzałki ← → na klawiaturze przechodzą między anomaliami.</p>",
+    p_zone_tip:"Tu powinien być załamek P|Przy prawidłowym rytmie w tym miejscu (0,06–0,30 s przed uderzeniem) jest mały garb P. Tu go brak.",
+    f_tip:"Fala f|Drobne falowanie linii między uderzeniami = przedsionki drgają zamiast się kurczyć.",
+    map_tip:(o,k)=>`Odcinek ${o}, odstęp ${k}`, sudden:" · nagła zmiana", mean:"średnio",
+    where_find:{irregular:"Na wykresie: pomarańczowe pole i pomarańczowa klamra nad wykresem.", pause:"Na wykresie: pomarańczowe pole i klamra nad wykresem.",
+      short:"Na wykresie: żółte kółko » pod klamrą odstępu.", noP:"Na wykresie: zielone zakreskowane pola przed każdym uderzeniem (w odprowadzeniach II, III, aVF, V1).",
+      fWaves:"Na wykresie: różowe trójkąciki nad drobnymi falami między uderzeniami.", rate:"Na wykresie: liczby nad klamrami pokazują tempo każdego odstępu (uderzeń na minutę)."},
+    legend_h:"Jak czytać zaznaczenia", table_h:n=>`Lista znalezionych anomalii (${n})`, col_no:"Nr", col_kind:"Rodzaj", col_what:"Co", col_where:"Gdzie",
+    on_chart:"Na wykresie", meaning:"Znaczenie", normally_i:"Normalnie",
+    legend_beat:"<b>Uderzenie serca (QRS)</b><br>Niebieskie kółko i numer nad wykresem. Każde to jeden skurcz komór, czyli jedno uderzenie wyczuwalne na tętnie.",
+    legend_nums:"<b>Liczby nad klamrami</b><br>Czas między dwoma uderzeniami (s) i odpowiadające mu tętno (/min). Mała pogrubiona liczba pod klamrą = numer anomalii z tabeli poniżej.",
+    seg_short:"odcinek", whole_short:"cały zapis",
+    types:{
+      irregular:["Nierówny odstęp","Przy prawidłowym rytmie kolejne odstępy różnią się zwykle o mniej niż 0,05–0,1 s, bo serce bije prawie jak metronom."],
+      noP:["Brak załamka P","Normalnie 0,12–0,20 s przed każdym wysokim szpicem (QRS) jest mały, zaokrąglony garb P, za każdym razem taki sam."],
+      short:["Bardzo krótki odstęp","W spoczynku odstęp między uderzeniami wynosi zwykle 0,6–1,0 s (60–100 uderzeń na minutę)."],
+      fWaves:["Fale f (drgania przedsionków)","Normalnie między końcem garbu T a następnym P linia jest prawie płaska."],
+      pause:["Dłuższa przerwa","Przy prawidłowym rytmie przerwy między uderzeniami są podobnej długości."],
+      rate:["Szybkie tętno","Norma w spoczynku to 60–100 uderzeń na minutę."]},
+    layers:{beats:"Uderzenia (QRS)", irregular:"Nierówne odstępy", noP:"Brak załamka P", short:"Bardzo krótkie odstępy", fWaves:"Fale f"},
+    legend:{irregular:["pomarańczowe pole + pomarańczowa klamra","kolejne uderzenie przyszło wyraźnie wcześniej albo później niż poprzednie; ciągłe takie skoki to główny znak migotania"],
+      short:["żółte kółko » pod klamrą","między dwoma uderzeniami minęło tak mało czasu, że odpowiada to tętnu powyżej 120/min"],
+      noP:["zielone zakreskowane pola przed uderzeniami","tu powinien być mały garb P (skurcz przedsionków); jego brak = przedsionki nie kurczą się normalnie"],
+      fWaves:["różowe trójkąciki nad linią","drobne fale między uderzeniami = przedsionki drgają zamiast się kurczyć"]},
+  },
+};
+
+// anomaly type -> marker, color and the layer that toggles it
+const TYPES = {
+  irregular:{icon:"↔", color:"var(--s2)", layer:"irregular"},
+  noP:{icon:"P", color:"var(--s3)", layer:"noP"},
+  short:{icon:"»", color:"var(--s4)", layer:"short"},
+  fWaves:{icon:"f", color:"var(--s5)", layer:"fWaves"},
+  pause:{icon:"‖", color:"var(--s6)", layer:"irregular"},
+  rate:{icon:"♥", color:"var(--s4)", layer:null},
+};
+const LAYERS = [
+  {key:"beats", icon:"●", color:"var(--s1)"},
+  {key:"irregular", icon:"↔", color:"var(--s2)"},
+  {key:"noP", icon:"P", color:"var(--s3)"},
+  {key:"short", icon:"»", color:"var(--s4)"},
+  {key:"fWaves", icon:"f", color:"var(--s5)"},
+];
+const ATRIAL = ["II","III","aVF","V1"];
+const LW = 48, TOP = 58, GAP = 4, RIGHT = 14;
+
+const state = {lang:D.lang, zoom:1, picked:null, hidden:new Set(), panels:[], view:"help"};
+try { const saved = localStorage.getItem("ecg-lang"); if (saved && I18N[saved]) state.lang = saved; } catch (e) {}
+const t = () => I18N[state.lang];
+const fmt = (x, d = 2) => { const s = Number(x).toFixed(d); return state.lang === "pl" ? s.replace(".", ",") : s; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tr = v => (v && typeof v === "object") ? v[state.lang] : v;   // pick the current language from {en, pl}
+
+// ---------- anomaly indexes ----------
+const A = D.anomalies;
+const rrKey = (w, time) => w + "|" + Number(time).toFixed(3);
+const byRR = {}, noP = {}, fWaves = {};
+A.forEach(a => {
+  if (a.t0 != null && a.window != null) (byRR[rrKey(a.window, a.t0)] ||= []).push(a);
+  if (a.type === "noP") noP[a.window] = a;
+  if (a.type === "fWaves") fWaves[a.window + "|" + a.lead] = a;
+});
+const no = a => A.indexOf(a) + 1;   // fixed anomaly number, the same on the chart and in the list (matters on paper)
+const half = i => D.windows[i].column === 0 ? t().left : t().right;
+
+// ---------- header with the result ----------
+function renderVerdict(){
+  const r = D.result, count = type => A.filter(a => a.type === type).length;
+  const [icon, title, desc] = D.conclusion[state.lang];
+  const tile = (label, value, note) => `<div class="card tile"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`;
+  const compared = D.windows.reduce((s, w) => s + Math.max(0, w.beats.length - 2), 0);
+  document.getElementById("verdict").innerHTML =
+    `<div class="card main"><div class="icon${icon === "✓" ? " ok" : ""}">${icon}</div>
+      <div><h3>${esc(title)}</h3><p>${esc(desc)}</p></div></div>` +
+    tile(t().t_rate, r.heartRate + "/min", t().t_rate_n) +
+    tile(t().t_irr, `${count("irregular")} ${t().t_irr_of} ${compared}`, t().t_irr_n(fmt(r.rrMin), fmt(r.rrMax))) +
+    tile(t().t_p, esc(tr(D.labels.pWaves)), t().t_p_n(r.pCorrelation == null ? "–" : fmt(r.pCorrelation))) +
+    tile(t().t_f, r.dominantFreq ? "~" + Math.round(r.dominantFreq * 60) + "/min" : "–", esc(tr(D.labels.atrialWaves)));
+}
+
+// ---------- chart panels ----------
+function render(){
+  const host = document.getElementById("charts");
+  const maxDur = Math.max(...D.windows.map(w => w.t1 - w.t0));
+  const pxs = Math.max(80, (host.clientWidth - 4 - LW - RIGHT) / maxDur) * state.zoom;
+  host.innerHTML = "";
+  state.panels = D.windows.map((w, i) => panel(w, i, pxs, host));
+  applyPick(false);
+}
+
+function panel(w, i, pxs, host){
+  const pxmv = pxs * 0.4, mm = 0.04 * pxs;
+  const X = time => LW + (time - w.t0) * pxs;
+  const W = Math.ceil(X(w.t1) + RIGHT);
+  let y = TOP;
+  const leads = w.leads.map(l => {
+    let mn = Infinity, mx = -Infinity;
+    for (const v of l.mv) { if (v < mn) mn = v; if (v > mx) mx = v; }
+    const vmax = Math.max(0.6, Math.min(2.2, mx + 0.2)), vmin = Math.min(-0.45, Math.max(-2.2, mn - 0.15));
+    const top = y, h = (vmax - vmin) * pxmv;
+    y += h + GAP;
+    return {l, top, h, vmax, vmin, Y: v => top + (vmax - Math.max(vmin, Math.min(vmax, v))) * pxmv};
+  });
+  const H = Math.ceil(y + 4);
+  const s = [];
+  s.push(`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>`);
+  s.push(`<pattern id="h${i}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatch" x1="0" y1="0" x2="0" y2="7"/></pattern>`);
+  leads.forEach((L, j) => {
+    const d5 = 5 * mm;
+    let minor = "";
+    for (let k = 1; k < 5; k++) minor += `M${k*mm} 0V${d5}M0 ${k*mm}H${d5}`;
+    s.push(`<pattern id="g${i}_${j}" patternUnits="userSpaceOnUse" x="${X(0)}" y="${L.Y(0)}" width="${d5}" height="${d5}">` +
+           `<rect class="paper-bg" width="${d5}" height="${d5}"/><path class="grid-minor" d="${minor}"/><path class="grid-major" d="M0 0V${d5}M0 0H${d5}"/></pattern>` +
+           `<clipPath id="c${i}_${j}"><rect x="${LW}" y="${L.top}" width="${W - LW}" height="${L.h}"/></clipPath>`);
+  });
+  s.push(`</defs><rect x="0" y="0" width="${W}" height="${H}" class="paper-bg"/>`);
+
+  // paper + original scan
+  leads.forEach((L, j) => {
+    s.push(`<rect x="${LW}" y="${L.top}" width="${W - LW}" height="${L.h}" fill="url(#g${i}_${j})"/>`);
+    const sc = L.l.scan;
+    s.push(`<image class="scan" clip-path="url(#c${i}_${j})" href="${sc.src}" x="${X(sc.t0)}" y="${L.top + (L.vmax - sc.mvTop) * pxmv}" ` +
+           `width="${(sc.t1 - sc.t0) * pxs}" height="${(sc.mvTop - sc.mvBottom) * pxmv}" preserveAspectRatio="none"/>`);
+  });
+
+  // irregular-interval bands (under the trace)
+  const beats = w.beats;
+  for (let k = 0; k + 1 < beats.length; k++) {
+    const irr = (byRR[rrKey(i, beats[k])] || []).find(a => a.type === "irregular" || a.type === "pause");
+    if (irr) s.push(`<rect class="band l-irregular" data-a="${irr.id}" x="${X(beats[k])}" y="${TOP - 4}" width="${X(beats[k+1]) - X(beats[k])}" height="${H - TOP}"/>`);
+  }
+
+  // zones where a P wave should be
+  const np = noP[i];
+  if (np) {
+    D.pZones.filter(z => z.window === i).forEach(z => {
+      leads.forEach(L => {
+        if (!ATRIAL.includes(L.l.name)) return;
+        const x0 = Math.max(X(z.t0), LW), x1 = X(z.t1);
+        if (x1 <= x0) return;
+        s.push(`<g class="p-zone l-noP" data-a="${np.id}" data-tip-key="p_zone_tip">` +
+               `<rect x="${x0}" y="${L.top}" width="${x1 - x0}" height="${L.h}" fill="url(#h${i})" opacity=".35"/>` +
+               `<rect class="outline" x="${x0}" y="${L.top + 1}" width="${x1 - x0}" height="${L.h - 2}"/></g>`);
+      });
+    });
+  }
+
+  // traces
+  leads.forEach((L, j) => {
+    const l = L.l, pts = [];
+    const step = Math.max(1, Math.floor(1 / (l.dt * pxs * 1.5)));
+    for (let k = 0; k < l.mv.length; k += step) pts.push(X(l.t0 + k * l.dt).toFixed(1) + " " + L.Y(l.mv[k]).toFixed(1));
+    s.push(`<path class="trace" clip-path="url(#c${i}_${j})" d="M${pts.join("L")}"/>`);
+  });
+
+  // beats
+  const main = leads.find(L => L.l.name === w.main) || leads[0];
+  beats.forEach((time, k) => {
+    const idx = Math.round((time - main.l.t0) / main.l.dt);
+    const v = main.l.mv[Math.max(0, Math.min(main.l.mv.length - 1, idx))];
+    s.push(`<g class="l-beats"><line class="beat-line" x1="${X(time)}" x2="${X(time)}" y1="${TOP - 6}" y2="${H - 2}"/>` +
+           `<circle class="beat-circle" data-beat="${i}|${k}" cx="${X(time)}" cy="${main.Y(v)}" r="7"/>` +
+           `<text class="beat-no" x="${X(time)}" y="${TOP - 10}" text-anchor="middle">${k + 1}</text></g>`);
+  });
+
+  // f waves
+  D.fWaves.filter(f => f.window === i).forEach(f => {
+    const L = leads.find(L => L.l.name === f.lead);
+    if (!L) return;
+    const a = fWaves[i + "|" + f.lead];
+    const x = X(f.t), yv = L.Y(f.mv) - 7;
+    s.push(`<path class="f-mark l-fWaves" ${a ? `data-a="${a.id}"` : ""} data-tip-key="f_tip" d="M${x - 5} ${yv - 7}H${x + 5}L${x} ${yv}Z"/>`);
+  });
+
+  // RR intervals (above the chart)
+  for (let k = 0; k + 1 < beats.length; k++) {
+    const a = beats[k], b = beats[k + 1], rr = b - a, bpm = Math.round(60 / rr);
+    const list = byRR[rrKey(i, a)] || [];
+    const irr = list.find(z => z.type === "irregular" || z.type === "pause");
+    const sh = list.find(z => z.type === "short");
+    const x0 = X(a) + 3, x1 = X(b) - 3, yl = 36, xm = (x0 + x1) / 2;
+    s.push(`<g class="rr${irr ? " irregular" : ""}" ${list.length ? `data-a="${list.map(z => z.id).join(" ")}"` : ""} data-rr="${i}|${k}">` +
+           `<rect class="hit" x="${x0}" y="4" width="${Math.max(4, x1 - x0)}" height="${TOP - 8}"/>` +
+           `<path d="M${x0} ${yl - 5}V${yl + 5}M${x1} ${yl - 5}V${yl + 5}"/><line x1="${x0}" x2="${x1}" y1="${yl}" y2="${yl}"/>` +
+           (x1 - x0 > 46 ? `<text class="l1" x="${xm}" y="${yl - 18}" text-anchor="middle">${fmt(rr)} s</text>` +
+                           `<text x="${xm}" y="${yl - 6}" text-anchor="middle">${bpm}/min</text>` : "") +
+           (sh ? `<g class="l-short"><circle class="short-badge" cx="${x1 - 9}" cy="${yl + 11}" r="7"/><text class="badge-text" x="${x1 - 9}" y="${yl + 14.5}" text-anchor="middle">»</text></g>` : "") +
+           (list.length ? `<text class="print-no print-only" x="${x0 + 3}" y="${yl + 15}">${list.map(no).join(", ")}</text>` : "") +
+           `</g>`);
+  }
+
+  // lead labels
+  leads.forEach(L => {
+    s.push(`<rect class="lead-label-bg" x="0" y="${L.top}" width="${LW - 4}" height="${L.h}"/>` +
+           `<text class="lead-label" x="${LW / 2 - 2}" y="${L.top + L.h / 2 + 4}" text-anchor="middle">${esc(L.l.name)}</text>`);
+  });
+  s.push(`<line class="cursor" id="cx${i}" x1="-10" x2="-10" y1="${TOP - 4}" y2="${H}"/><text class="cursor-text" id="ct${i}" x="-100" y="${TOP - 26}"></text>`);
+  s.push(`</svg>`);
+
+  const nums = A.filter(a => a.window === i).map(no);
+  const div = document.createElement("section");
+  div.className = "panel"; div.id = "panel-" + i;
+  div.innerHTML = `<div class="panel-head"><b>${t().segment} ${i + 1}: ${esc(w.name)}</b>` +
+    `<span>${esc(w.file)}, ${half(i)} · ${fmt(w.t1 - w.t0, 1)} ${t().s_of_rec} · ${beats.length} ${t().beats}` +
+    (nums.length ? `<span class="print-only-inline"> · ${t().anomalies_no} ${nums[0]}–${nums[nums.length - 1]}</span>` : "") +
+    `</span></div><div class="scroller">${s.join("")}</div>`;
+  host.appendChild(div);
+  bindSvg(div.querySelector("svg"), i, pxs, w);
+  return {div, scroller: div.querySelector(".scroller"), X};
+}
+
+// ---------- interaction ----------
+const tooltip = document.getElementById("tooltip");
+function showTip(e, text){
+  const [title, body] = text.split("|");
+  tooltip.innerHTML = `<b>${title}</b>${body || ""}`;
+  tooltip.style.display = "block";
+  const r = tooltip.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14;
+  tooltip.style.left = x + "px"; tooltip.style.top = y + "px";
+}
+const hideTip = () => tooltip.style.display = "none";
+
+// tooltip text for an element, built in the current language
+function tipFor(el){
+  if (el.dataset.tipKey) return t()[el.dataset.tipKey];
+  if (el.dataset.beat) {
+    const [o, k] = el.dataset.beat.split("|").map(Number);
+    return `${t().beat_no(k + 1)}|${t().beat_title} (QRS). ${t().time}: ${fmt(D.windows[o].beats[k])} s.`;
+  }
+  if (el.dataset.rr) {
+    const [o, k] = el.dataset.rr.split("|").map(Number);
+    const b = D.windows[o].beats, rr = b[k + 1] - b[k];
+    const a = (byRR[rrKey(o, b[k])] || [])[0];
+    if (a) return `${esc(tr(a.title))}|${esc(tr(a.text))}`;
+    return `${t().interval} ${fmt(rr)} s (${Math.round(60 / rr)}/min)|${t().rr_similar}`;
+  }
+  if (el.dataset.a) { const a = A.find(x => x.id === el.dataset.a.split(" ")[0]); return `${esc(tr(a.title))}|${esc(tr(a.text))}`; }
+  return null;
+}
+
+function bindSvg(svg, i, pxs, w){
+  const cx = svg.querySelector("#cx" + i), ct = svg.querySelector("#ct" + i);
+  svg.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect(), x = e.clientX - r.left;
+    if (x > LW) {
+      cx.setAttribute("x1", x); cx.setAttribute("x2", x);
+      ct.setAttribute("x", x + 4); ct.textContent = fmt(w.t0 + (x - LW) / pxs) + " s";
+    }
+    const el = e.target.closest("[data-tip-key],[data-beat],[data-rr],[data-a]");
+    const text = el && tipFor(el);
+    if (text) showTip(e, text); else hideTip();
+  });
+  svg.addEventListener("mouseleave", () => { cx.setAttribute("x1", -10); cx.setAttribute("x2", -10); ct.textContent = ""; hideTip(); });
+  svg.addEventListener("click", e => {
+    const el = e.target.closest("[data-a],[data-beat],[data-rr]");
+    if (!el) return;
+    if (el.dataset.a) return pick(el.dataset.a.split(" ")[0], false);
+    if (el.dataset.beat) { const [o, k] = el.dataset.beat.split("|").map(Number); return showBeat(o, k); }
+    if (el.dataset.rr) { const [o, k] = el.dataset.rr.split("|").map(Number); return showInterval(o, k); }
+  });
+}
+
+const visible = a => { const l = TYPES[a.type].layer; return !l || !state.hidden.has(l); };
+const visibleList = () => A.filter(visible);
+
+function pick(id, scroll = true){
+  state.picked = id; state.view = "anomaly";
+  const a = A.find(x => x.id === id), T = TYPES[a.type], [kind, normal] = t().types[a.type];
+  const list = visibleList(), pos = list.indexOf(a);
+  let where = t().applies_whole;
+  if (a.window != null) {
+    where = `${t().segment} ${a.window + 1} (${esc(D.windows[a.window].name)})`;
+    if (a.t0 != null) where += ` · ${t().from} ${fmt(a.t0)} s ${t().to} ${fmt(a.t1)} s`;
+    if (a.lead) where += ` · ${t().lead} ${esc(a.lead)}`;
+  }
+  document.getElementById("details").innerHTML =
+    `<div class="kind"><span class="badge" style="--c:${T.color}">${T.icon}</span>${kind}</div>` +
+    `<h3>${esc(tr(a.title))}</h3><p class="where">${where}</p><p>${esc(tr(a.text))}</p>` +
+    `<p class="where">${t().where_find[a.type]}</p>` +
+    `<p class="normal"><b>${t().normally}</b> ${normal}</p>` +
+    `<div class="nav"><button class="btn" id="prev">${t().prev}</button><span>${pos + 1} / ${list.length}</span>` +
+    `<button class="btn" id="next">${t().next}</button></div>`;
+  document.getElementById("prev").onclick = () => step(-1);
+  document.getElementById("next").onclick = () => step(1);
+  document.querySelectorAll("#list li.item").forEach(li => li.classList.toggle("active", li.dataset.id === id));
+  const li = document.querySelector(`#list li[data-id="${id}"]`);
+  if (li) li.scrollIntoView({block:"nearest"});
+  applyPick(scroll);
+}
+
+function step(d){
+  const list = visibleList();
+  if (!list.length) return;
+  let k = list.findIndex(a => a.id === state.picked);
+  k = (k + d + list.length) % list.length;
+  pick(list[k].id);
+}
+
+function applyPick(scroll){
+  document.querySelectorAll(".picked").forEach(e => e.classList.remove("picked"));
+  document.querySelectorAll(".panel.selected").forEach(e => e.classList.remove("selected"));
+  const id = state.picked;
+  if (!id) return;
+  document.querySelectorAll(`[data-a~="${id}"]`).forEach(e => e.classList.add("picked"));
+  const a = A.find(x => x.id === id);
+  if (a.window == null) return;
+  const p = state.panels[a.window];
+  p.div.classList.add("selected");
+  if (scroll) {
+    p.div.scrollIntoView({block:"center", behavior:"smooth"});
+    if (a.t0 != null) p.scroller.scrollTo({left:Math.max(0, p.X(a.t0) - 120), behavior:"smooth"});
+  }
+}
+
+function showBeat(o, k){
+  state.picked = null; state.view = ["beat", o, k]; applyPick(false);
+  document.getElementById("details").innerHTML =
+    `<div class="kind"><span class="badge" style="--c:var(--s1)">●</span>${t().beat_title}</div>` +
+    `<h3>${t().beat_h(k + 1, o + 1)}</h3><p class="where">${t().time} ${fmt(D.windows[o].beats[k])} s</p>` +
+    `<p>${t().beat_text}</p><p class="normal">${t().beat_hint}</p>`;
+}
+
+function showInterval(o, k){
+  const b = D.windows[o].beats, rr = b[k + 1] - b[k];
+  state.picked = null; state.view = ["interval", o, k]; applyPick(false);
+  document.getElementById("details").innerHTML =
+    `<div class="kind"><span class="badge" style="--c:var(--muted)">↔</span>${t().rr_title}</div>` +
+    `<h3>${fmt(rr)} s (${Math.round(60 / rr)}/min)</h3><p class="where">${t().rr_between(o + 1, k + 1, k + 2)}</p>` +
+    `<p>${t().rr_text(fmt(D.result.rrMean))}</p>`;
+}
+
+function showHelp(){
+  state.view = "help";
+  document.getElementById("details").innerHTML =
+    `<h3>${t().how_title}</h3>${t().how}<div class="nav"><span></span><button class="btn" id="first">${t().first}</button></div>`;
+  document.getElementById("first").onclick = () => step(1);
+}
+
+function refreshDetails(){
+  const v = state.view;
+  if (v === "anomaly" && state.picked) pick(state.picked, false);
+  else if (Array.isArray(v) && v[0] === "beat") showBeat(v[1], v[2]);
+  else if (Array.isArray(v) && v[0] === "interval") showInterval(v[1], v[2]);
+  else showHelp();
+}
+
+// ---------- anomaly list ----------
+function renderList(){
+  const ol = document.getElementById("list"), vis = visibleList();
+  document.getElementById("count").textContent = `(${vis.length})`;
+  let out = "", group = null;
+  vis.forEach(a => {
+    const g = a.window == null ? t().whole : `${t().segment} ${a.window + 1}: ${D.windows[a.window].name}`;
+    if (g !== group) { out += `<li class="group-title">${esc(g)}</li>`; group = g; }
+    const T = TYPES[a.type];
+    out += `<li class="item${a.id === state.picked ? " active" : ""}" data-id="${a.id}"><span class="badge" style="--c:${T.color}">${T.icon}</span><span>${esc(tr(a.title))}</span></li>`;
+  });
+  ol.innerHTML = out;
+  ol.querySelectorAll("li.item").forEach(li => li.onclick = () => pick(li.dataset.id));
+}
+
+// ---------- interval map ----------
+function renderMap(){
+  const svg = document.getElementById("rrmap");
+  const W = 320, bottom = 100, top = 8;
+  const all = [];
+  D.windows.forEach((w, i) => { for (let k = 0; k + 1 < w.beats.length; k++) all.push({i, k, rr:w.beats[k+1] - w.beats[k]}); });
+  const maxRR = Math.max(1.0, ...all.map(z => z.rr));
+  const bw = (W - 8) / (all.length + D.windows.length - 1);
+  const yv = v => bottom - (v / maxRR) * (bottom - top);
+  let s = "", x = 4, prev = 0;
+  all.forEach(z => {
+    if (z.i !== prev) { x += bw; prev = z.i; }
+    const list = byRR[rrKey(z.i, D.windows[z.i].beats[z.k])] || [];
+    const irr = list.find(a => a.type === "irregular" || a.type === "pause");
+    const target = irr || list[0];
+    s += `<rect x="${x + 1}" y="${yv(z.rr)}" width="${Math.max(2, bw - 2)}" height="${bottom - yv(z.rr)}" rx="2" style="fill:${irr ? "var(--s2)" : "var(--s1)"}" ` +
+         `data-target="${target ? target.id : ""}" data-rr="${z.i}|${z.k}" data-tip="${t().map_tip(z.i + 1, z.k + 1)}|${fmt(z.rr)} s (${Math.round(60 / z.rr)}/min)${irr ? t().sudden : ""}"/>`;
+    x += bw;
+  });
+  const m = D.result.rrMean;
+  s += `<line x1="4" x2="${W - 4}" y1="${yv(m)}" y2="${yv(m)}" style="stroke:var(--ink);stroke-dasharray:4 3;opacity:.6"/>` +
+       `<text x="${W - 4}" y="${yv(m) - 4}" text-anchor="end" style="font:10px system-ui;fill:var(--ink2)">${t().mean} ${fmt(m)} s</text>` +
+       `<line x1="4" x2="${W - 4}" y1="${bottom}" y2="${bottom}" style="stroke:var(--line)"/>`;
+  svg.innerHTML = s;
+  svg.onmousemove = e => { const el = e.target.closest("[data-tip]"); if (el) showTip(e, el.dataset.tip); else hideTip(); };
+  svg.onmouseleave = hideTip;
+  svg.onclick = e => {
+    const el = e.target.closest("rect[data-rr]");
+    if (!el) return;
+    const [i, k] = el.dataset.rr.split("|").map(Number);
+    if (el.dataset.target) return pick(el.dataset.target);
+    showInterval(i, k);
+    const p = state.panels[i];
+    p.div.scrollIntoView({block:"center", behavior:"smooth"});
+    p.scroller.scrollTo({left:Math.max(0, p.X(D.windows[i].beats[k]) - 120), behavior:"smooth"});
+  };
+}
+
+// ---------- print section ----------
+function renderPrint(){
+  const legend = ["irregular", "short", "noP", "fWaves"].map(type => {
+    const T = TYPES[type], [kind, normal] = t().types[type], [look, meaning] = t().legend[type];
+    return `<div><span class="badge" style="--c:${T.color}">${T.icon}</span> <b>${kind}</b><br>${t().on_chart}: ${look}.<br>${t().meaning}: ${meaning}.<br><i>${t().normally_i}:</i> ${normal}</div>`;
+  }).join("") + `<div><span class="badge" style="--c:var(--s1)">●</span> ${t().legend_beat}</div><div>${t().legend_nums}</div>`;
+  const rows = A.map(a => {
+    const T = TYPES[a.type];
+    let where = t().whole_short;
+    if (a.window != null) {
+      where = `${t().seg_short} ${a.window + 1} (${esc(D.windows[a.window].name)})`;
+      if (a.t0 != null) where += `, ${fmt(a.t0)}–${fmt(a.t1)} s`;
+      if (a.lead) where += `, ${esc(a.lead)}`;
+    }
+    return `<tr><td>${no(a)}</td><td><span class="badge" style="--c:${T.color}">${T.icon}</span> ${t().types[a.type][0]}</td><td>${esc(tr(a.title))}</td><td>${where}</td></tr>`;
+  }).join("");
+  document.getElementById("print-section").innerHTML =
+    `<h2>${t().legend_h}</h2><div class="print-legend">${legend}</div>` +
+    `<h2>${t().table_h(A.length)}</h2>` +
+    `<table><tr><td><b>${t().col_no}</b></td><td><b>${t().col_kind}</b></td><td><b>${t().col_what}</b></td><td><b>${t().col_where}</b></td></tr>${rows}</table>`;
+}
+
+// ---------- toolbar ----------
+function renderLayers(){
+  const g = document.getElementById("layers");
+  g.querySelectorAll(".chip").forEach(c => c.remove());
+  LAYERS.forEach(l => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.setAttribute("aria-pressed", String(!state.hidden.has(l.key)));
+    b.innerHTML = `<span class="badge" style="--c:${l.color}">${l.icon}</span>${t().layers[l.key]}`;
+    b.onclick = () => {
+      const hide = !state.hidden.has(l.key);
+      if (hide) state.hidden.add(l.key); else state.hidden.delete(l.key);
+      b.setAttribute("aria-pressed", String(!hide));
+      document.body.classList.toggle("hide-" + l.key, hide);
+      renderList();
+      if (state.picked && !visible(A.find(x => x.id === state.picked))) { state.picked = null; applyPick(false); showHelp(); }
+    };
+    g.appendChild(b);
+  });
+}
+
+function setupToolbar(){
+  const z = document.getElementById("zoom");
+  const setZoom = v => { state.zoom = Math.max(1, Math.min(6, v)); z.value = state.zoom; render(); };
+  z.oninput = () => setZoom(+z.value);
+  document.getElementById("zoomIn").onclick = () => setZoom(state.zoom + 0.5);
+  document.getElementById("zoomOut").onclick = () => setZoom(state.zoom - 0.5);
+  document.getElementById("zoomFit").onclick = () => setZoom(1);
+  const sb = document.getElementById("scanBtn");
+  sb.onclick = () => {
+    const on = sb.getAttribute("aria-pressed") !== "true";
+    sb.setAttribute("aria-pressed", String(on));
+    document.body.classList.toggle("scan-on", on);
+  };
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") { step(1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { step(-1); e.preventDefault(); }
+  });
+  if (D.reportLink) { const a = document.getElementById("reportLink"); a.href = D.reportLink; a.hidden = false; }
+  document.querySelectorAll(".btn-print").forEach(b => b.onclick = () => window.print());
+  document.querySelectorAll(".lang button").forEach(b => b.onclick = () => setLang(b.dataset.lang));
+
+  let beforePrint = null;
+  addEventListener("beforeprint", () => {
+    beforePrint = {zoom:state.zoom, glossary:document.getElementById("glossary").open};
+    document.getElementById("glossary").open = true;
+    if (state.zoom !== 1) { state.zoom = 1; z.value = 1; render(); }
+  });
+  addEventListener("afterprint", () => {
+    if (!beforePrint) return;
+    document.getElementById("glossary").open = beforePrint.glossary;
+    if (beforePrint.zoom !== 1) { state.zoom = beforePrint.zoom; z.value = state.zoom; render(); }
+    beforePrint = null;
+  });
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+}
+
+// ---------- language ----------
+function setLang(lang){
+  state.lang = lang;
+  try { localStorage.setItem("ecg-lang", lang); } catch (e) {}
+  document.documentElement.lang = lang;
+  document.title = t().title;
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t()[el.dataset.i18n]);
+  document.querySelectorAll("[data-i18n-html]").forEach(el => el.innerHTML = t()[el.dataset.i18nHtml]);
+  document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  document.querySelector("#glossary table").innerHTML = D.glossary[lang].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+  renderVerdict(); renderLayers(); render(); renderList(); renderMap(); renderPrint(); refreshDetails();
+}
+
+setupToolbar();
+setLang(state.lang);
+})();
+</script>
+</body>
+</html>

@@ -1,8 +1,10 @@
 # paper-ecg-explainer
 
-**Turn a scanned or photographed paper ECG into an interactive, plain-language explanation of the heart rhythm.**
+**Turn a scanned or photographed paper ECG into an interactive, plain-language explanation of the heart rhythm, in English or Polish.**
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![uv](https://img.shields.io/badge/managed%20with-uv-6340ac)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-educational%20prototype-orange)
 ![Not a medical device](https://img.shields.io/badge/NOT%20a%20medical%20device-red)
 
@@ -18,16 +20,15 @@
 > Nie używaj go do stawiania diagnozy ani podejmowania decyzji o leczeniu. EKG zawsze ocenia lekarz.
 > W nagłym wypadku dzwoń pod 112.
 
-![Interactive ECG viewer on a fictional demo recording](docs/przegladarka.png)
-<sub>Screenshot generated from a **fictional, synthetic** ECG (see [`demo/`](demo)), not from a real patient.</sub>
+![Interactive ECG viewer on a fictional demo recording](docs/viewer.png)
+<sub>Screenshot generated from a **fictional, synthetic** ECG (see [`demo/`](demo)), not from a real patient.
+Polish version: [`docs/viewer_pl.png`](docs/viewer_pl.png).</sub>
 
 ## Why
 
 ECG printouts are hard to read if you are not a doctor: a red grid, spikes, cryptic labels like *aVR* or *V1*.
 This project started from a simple wish to understand what such a chart actually shows. The first working
 version was built in about 30 minutes with [Claude Code](https://claude.com/claude-code).
-
-The user interface and the reports are in **Polish**; the code is commented in Polish as well.
 
 ## What it does
 
@@ -39,30 +40,41 @@ The user interface and the reports are in **Polish**; the code is commented in P
    - very short intervals (rate above 120/min) and long pauses,
    - missing repeatable P waves before the beats,
    - fibrillatory "f" waves between the beats (QRST cancellation + spectrum: dominant frequency and organization index).
-4. **Opens an interactive viewer** (`przegladarka_ekg.html`, one offline HTML file):
+4. **Opens an interactive viewer** (`ecg_viewer.html`, one offline HTML file):
+   - **EN / PL switch** that changes the whole interface instantly,
    - all 12 leads redrawn on an ECG-paper grid with the anomalies marked on the trace,
    - hover for a tooltip, click for a plain-language explanation and *"what normal looks like"*,
    - clickable anomaly list, RR interval map, zoom, ← / → to step through anomalies,
    - overlay of the original scan to check the digitization.
-5. **Prints:** a print-ready PDF (`ekg_do_druku.pdf`, A4 landscape) with numbered anomalies, legend, anomaly table
+5. **Prints:** a print-ready PDF (`ecg_print.pdf`, A4 landscape) with numbered anomalies, legend, anomaly table
    and a glossary of ECG symbols. The viewer also has a print button with the same layout.
-6. **Writes a longer report** (`raport_ekg.html`) explaining ECG basics with synthetic "normal vs. AF" examples.
+6. **Writes a longer report** (`ecg_report.html`) explaining ECG basics with synthetic "normal vs. AF" examples.
 
 ## Quick start
 
+Requires [uv](https://docs.astral.sh/uv/) (it installs Python and the dependencies for you).
+
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/takzen/paper-ecg-explainer.git
+cd paper-ecg-explainer
 
 # try it on the fictional demo recording
-python demo/generuj_demo.py
-python ekg_analiza.py demo/demo_konczynowe.png demo/demo_przedsercowe.png -o demo/wynik
+uv run demo/make_demo.py
+uv run ecg_explain.py demo/demo_limb.png demo/demo_chest.png -o demo/output
 
-# your own scans (limb leads first, chest leads second)
-python ekg_analiza.py scan_limb_leads.jpg scan_chest_leads.jpg
+# your own scans (limb leads first, chest leads second), Polish output
+uv run ecg_explain.py scan_limb_leads.jpg scan_chest_leads.jpg --lang pl
 ```
 
-The viewer opens in the browser automatically (`--nie-otwieraj` disables it). The PDF is rendered by a locally
-installed Edge or Chrome in headless mode; without one, use the print button in the viewer.
+| option | meaning |
+|--------|---------|
+| `--lang en\|pl` | language of the report and PDF, and the viewer's default language (default `en`) |
+| `-o, --output DIR` | output folder (default: folder of the first scan) |
+| `--leads "I,II,III,aVR,aVL,aVF"` | lead names for the next file, column by column from the top |
+| `--no-open` | do not open the viewer in the browser |
+
+The PDF is rendered by a locally installed Edge or Chrome in headless mode; without one, use the print button
+in the viewer.
 
 ### Supported printout layout
 
@@ -73,22 +85,17 @@ By default the tool expects the common 3-row × 2-column printout (e.g. AsCARD):
 | 1st  | I, II, III  | aVR, aVL, aVF |
 | 2nd  | V1, V2, V3  | V4, V5, V6    |
 
-Other lead orders can be named explicitly:
-
-```bash
-python ekg_analiza.py scan.jpg --odprowadzenia "I,II,III,aVR,aVL,aVF" -o results_folder
-```
-
 ## Project layout
 
 | file | role |
 |------|------|
-| `ekg_analiza.py` | command-line entry point, PDF export |
-| `digitalizacja.py` | image → signal (grid detection, deskew, line tracing) |
-| `analiza.py` | QRS detection, RR irregularity, P waves, atrial spectrum, anomaly list |
-| `przegladarka.py`, `przegladarka.html` | interactive viewer (data builder + HTML/JS template) |
-| `raport.py`, `wykresy.py` | longer HTML report with charts |
-| `demo/generuj_demo.py` | generates fictional ECG scans for the demo |
+| `ecg_explain.py` | command-line entry point, PDF export |
+| `digitize.py` | image → signal (grid detection, deskew, line tracing) |
+| `analysis.py` | QRS detection, RR irregularity, P waves, atrial spectrum, anomaly list |
+| `texts.py` | all user-facing wording in English and Polish |
+| `viewer.py`, `viewer_template.html` | interactive viewer (data builder + HTML/JS template with the EN/PL switch) |
+| `report.py`, `charts.py` | longer HTML report with charts |
+| `demo/make_demo.py` | generates fictional ECG scans for the demo |
 
 ## Limitations
 
@@ -102,7 +109,11 @@ python ekg_analiza.py scan.jpg --odprowadzenia "I,II,III,aVR,aVL,aVF" -o results
 ## Privacy
 
 Real ECG scans and the generated reports are git-ignored on purpose. They are personal medical data and should
-never be committed. The only image in this repository is a screenshot made from the fictional demo recording.
+never be committed. The only images in this repository are screenshots made from the fictional demo recording.
+
+## License
+
+[MIT](LICENSE) © 2026 Krzysztof Pika
 
 ## Medical disclaimer
 
