@@ -42,12 +42,18 @@ CONSOLE = {
            "rate": "Mean heart rate", "irr": "Rhythm irregularity", "p": "P waves", "f": "Atrial waves",
            "result": "Result", "viewer": "Interactive viewer", "report": "Report", "print": "Print (PDF)",
            "no_pdf": "No PDF (Edge/Chrome not found) - use the Print button in the viewer.",
-           "disclaimer": "Educational tool - not a substitute for a doctor's assessment."},
+           "disclaimer": "Educational tool - not a substitute for a doctor's assessment.",
+           "missing": "File not found: {f}",
+           "missing_hint": 'Give the full path to the scan, e.g. "C:\\Users\\me\\Desktop\\ecg\\scan1.jpg" '
+                           "(in quotes if it contains spaces)."},
     "pl": {"reading": "Odczytuję {f} ...", "analyzing": "Analizuję rytm ...", "pdf": "Przygotowuję PDF do druku ...",
            "rate": "Średnie tętno", "irr": "Nierówność rytmu", "p": "Załamki P", "f": "Falowanie linii",
            "result": "Wniosek", "viewer": "Przeglądarka", "report": "Raport", "print": "Do druku (PDF)",
            "no_pdf": "PDF nie powstał (brak Edge/Chrome) - drukuj przyciskiem Drukuj w przeglądarce.",
-           "disclaimer": "Narzędzie edukacyjne - nie zastępuje oceny lekarza."},
+           "disclaimer": "Narzędzie edukacyjne - nie zastępuje oceny lekarza.",
+           "missing": "Nie znaleziono pliku: {f}",
+           "missing_hint": 'Podaj pełną ścieżkę do skanu, np. "C:\\Users\\ja\\Pulpit\\ekg\\skan1.jpg" '
+                           "(w cudzysłowie, jeśli zawiera spacje)."},
 }
 
 
@@ -70,8 +76,9 @@ def save_pdf(html_path, pdf_path):
 
 
 def main():
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="Explain a scanned paper ECG in plain language (educational, not a medical device).")
     ap.add_argument("files", nargs="+", help="ECG printout scans (jpg/png/webp) in recording order")
     ap.add_argument("--leads", action="append",
@@ -82,6 +89,10 @@ def main():
     ap.add_argument("--no-open", action="store_true", help="do not open the viewer in the browser")
     args = ap.parse_args()
     c = CONSOLE[args.lang]
+
+    missing = [f for f in args.files if not os.path.isfile(f)]
+    if missing:
+        sys.exit("\n".join(c["missing"].format(f=f) for f in missing) + "\n" + c["missing_hint"])
 
     names = args.leads or []
     printouts = []
