@@ -214,6 +214,90 @@ def analizuj(wydruki):
     return wynik
 
 
+def fale_f(okno, odp):
+    """Pojedyncze fale przedsionkowe (f/F) między uderzeniami - szczyty w zapisie po odjęciu QRS i T."""
+    fs = odp.fs
+    x = _aktywnosc_przedsionkow(odp, okno.uderzenia)
+    b, a = sps.butter(3, [3, 12], btype="band", fs=fs)
+    x = sps.filtfilt(b, a, sps.detrend(x))
+    poza_qrs = np.ones(len(x), bool)
+    for tr in okno.uderzenia:
+        poza_qrs &= ~((odp.t > tr - 0.08) & (odp.t < tr + 0.12))
+    if poza_qrs.sum() < fs * 0.5:
+        return np.array([])
+    szczyty, _ = sps.find_peaks(x, distance=int(0.1 * fs), prominence=0.8 * np.std(x[poza_qrs]))
+    szczyty = [s for s in szczyty if poza_qrs[s]]
+    return odp.t[szczyty]
+
+
+def znajdz_anomalie(wynik):
+    """Lista konkretnych miejsc w zapisie, które odbiegają od prawidłowego rytmu - z opisem dla laika."""
+    anomalie, fale, strefy_p = [], [], []
+    sr = wynik.rr.mean()
+
+    def dodaj(**k):
+        k["id"] = f"a{len(anomalie)}"
+        anomalie.append(k)
+
+    if wynik.tetno > 100:
+        dodaj(typ="tempo", okno=None, t0=None, t1=None,
+              tytul=f"Szybkie tętno: średnio {wynik.tetno:.0f}/min",
+              opis=(f"W spoczynku serce powinno bić ok. 60–100 razy na minutę. Tu średnio {wynik.tetno:.0f}/min. "
+                    "Przy migotaniu komory często biją za szybko, bo dostają z przedsionków zbyt wiele impulsów."))
+
+    for i, okno in enumerate(wynik.okna):
+        r = okno.uderzenia
+        rr = np.diff(r)
+        for j in range(len(rr)):
+            a, b = r[j], r[j + 1]
+            bpm = 60 / rr[j]
+            if j > 0:
+                zmiana = rr[j] - rr[j - 1]
+                if abs(zmiana) > 0.1 * sr:
+                    kierunek = "wcześniej" if zmiana < 0 else "później"
+                    dodaj(typ="nierowny", okno=i, t0=a, t1=b,
+                          tytul=f"Nierówny odstęp: {rr[j]:.2f} s po {rr[j - 1]:.2f} s",
+                          opis=(f"To uderzenie przyszło o {abs(zmiana):.2f} s {kierunek}, niż wynikałoby z poprzedniego "
+                                f"odstępu ({rr[j - 1]:.2f} s → {rr[j]:.2f} s, czyli {60 / rr[j - 1]:.0f}/min → {bpm:.0f}/min). "
+                                "Zdrowe serce w spoczynku bije prawie jak metronom. Takie skoki raz w jedną, "
+                                "raz w drugą stronę to główny znak migotania przedsionków."))
+            if bpm > 120:
+                dodaj(typ="szybki", okno=i, t0=a, t1=b,
+                      tytul=f"Bardzo krótki odstęp: {rr[j]:.2f} s ({bpm:.0f}/min)",
+                      opis=(f"Między tymi dwoma uderzeniami minęło tylko {rr[j]:.2f} s. Gdyby serce tak biło cały czas, "
+                            f"tętno wynosiłoby {bpm:.0f}/min."))
+            if rr[j] > 1.5 * sr:
+                dodaj(typ="pauza", okno=i, t0=a, t1=b,
+                      tytul=f"Dłuższa przerwa: {rr[j]:.2f} s",
+                      opis=f"Odstęp jest o połowę dłuższy niż średnia ({sr:.2f} s).")
+
+        # strefy przed QRS, gdzie powinien być załamek P
+        for tr in r:
+            strefy_p.append({"okno": i, "t0": tr - 0.30, "t1": tr - 0.06})
+        if wynik.p_ocena == "brak powtarzalnych":
+            dodaj(typ="brakP", okno=i, t0=None, t1=None,
+                  tytul=f"Brak załamków P (odcinek {i + 1})",
+                  opis=("Zakreskowane pola to miejsca tuż przed każdym uderzeniem, gdzie przy zdrowym rytmie widać "
+                        "mały, zawsze taki sam garb P. Tu przed żadnym uderzeniem nie ma powtarzalnego garbu. "
+                        "Przedsionki nie kurczą się normalnie."))
+
+        for o in okno.odprowadzenia:
+            if o.nazwa not in ODPROWADZENIA_PRZEDSIONKOWE:
+                continue
+            tf = fale_f(okno, o)
+            for t in tf:
+                i_ = int(np.argmin(np.abs(o.t - t)))
+                fale.append({"okno": i, "lead": o.nazwa, "t": float(t), "mv": float(o.mv[i_])})
+            if len(tf) >= 4:
+                tempo = 60 / np.median(np.diff(tf))
+                dodaj(typ="faleF", okno=i, t0=None, t1=None, lead=o.nazwa,
+                      tytul=f"Fale f w {o.nazwa}: ok. {tempo:.0f}/min",
+                      opis=(f"Różowe trójkąciki pokazują drobne fale między uderzeniami (ok. {tempo:.0f} na minutę). "
+                            "To przedsionki, które zamiast jednego skurczu drgają bardzo szybko. "
+                            "Przy trzepotaniu fale są równe (ok. 250–350/min), przy migotaniu szybsze i nieregularne."))
+    return anomalie, fale, strefy_p
+
+
 def _wniosek(w):
     if w.ocena_niemiarowosci == "wysoka" and w.p_ocena != "powtarzalne":
         if "trzepotaniu" in w.ocena_fal:

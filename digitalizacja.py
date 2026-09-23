@@ -28,6 +28,9 @@ class Odprowadzenie:
     x_px: np.ndarray        # położenie próbek na obrazie (do nakładki)
     y_px: np.ndarray
     ramka: tuple            # (x0, y0, x1, y1) wycinka obrazu z tym odprowadzeniem
+    x_zero: float = 0.0     # piksel, od którego liczymy czas w kolumnie
+    y_zero: float = 0.0     # piksel odpowiadający 0 mV (przed usunięciem linii bazowej)
+    px_na_mv: float = 118.0
 
 
 @dataclass
@@ -238,5 +241,6 @@ def digitalizuj(plik, nazwy_odprowadzen, wierszy=3, kolumn=2):
             t = (xs - granice[k]) / fs
             ramka = (int(xs[0]) - 20, ya, int(xs[-1]) + 20, yb)
             wydruk.odprowadzenia.append(
-                Odprowadzenie(nazwa, k, t, mv, fs, xs, y, ramka))
+                Odprowadzenie(nazwa, k, t, mv, fs, xs, y, ramka,
+                              x_zero=float(granice[k]), y_zero=float(np.median(y)), px_na_mv=px_na_mv))
     return wydruk

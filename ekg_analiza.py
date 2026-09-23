@@ -3,7 +3,7 @@ Analizator EKG ze skanów wydruku - narzędzie edukacyjne (NIE jest wyrobem medy
 
 Użycie:
     python ekg_analiza.py skan1.webp skan2.webp
-    python ekg_analiza.py skan1.webp --odprowadzenia "I,II,III,aVR,aVL,aVF" -o raport.html
+    python ekg_analiza.py skan1.webp --odprowadzenia "I,II,III,aVR,aVL,aVF" -o folder_wynikow
 
 Domyślnie zakłada wydruk 3 wiersze x 2 kolumny (np. AsCARD):
   pierwszy plik  -> I, II, III | aVR, aVL, aVF
@@ -12,9 +12,11 @@ Domyślnie zakłada wydruk 3 wiersze x 2 kolumny (np. AsCARD):
 import argparse
 import os
 import sys
+import webbrowser
 
 from analiza import analizuj
 from digitalizacja import digitalizuj
+import przegladarka
 import raport
 
 DOMYSLNE = [
@@ -30,7 +32,9 @@ def main():
     ap.add_argument("pliki", nargs="+", help="skany wydruku EKG (jpg/png/webp), w kolejności nagrania")
     ap.add_argument("--odprowadzenia", action="append",
                     help="nazwy odprowadzeń dla kolejnego pliku, kolumnami od góry, np. \"I,II,III,aVR,aVL,aVF\"")
-    ap.add_argument("-o", "--wyjscie", default=None, help="plik raportu HTML (domyślnie obok pierwszego skanu)")
+    ap.add_argument("-o", "--wyjscie", default=None,
+                    help="folder na wyniki (domyślnie folder pierwszego skanu)")
+    ap.add_argument("--nie-otwieraj", action="store_true", help="nie otwieraj przeglądarki po analizie")
     args = ap.parse_args()
 
     nazwy = args.odprowadzenia or []
@@ -44,8 +48,12 @@ def main():
 
     print("Analizuję rytm ...")
     wynik = analizuj(wydruki)
-    wyjscie = args.wyjscie or os.path.join(os.path.dirname(os.path.abspath(args.pliki[0])), "raport_ekg.html")
-    raport.generuj(wydruki, wynik, wyjscie)
+    folder = args.wyjscie or os.path.dirname(os.path.abspath(args.pliki[0]))
+    os.makedirs(folder, exist_ok=True)
+    sciezka_raportu = os.path.join(folder, "raport_ekg.html")
+    sciezka_przegladarki = os.path.join(folder, "przegladarka_ekg.html")
+    raport.generuj(wydruki, wynik, sciezka_raportu)
+    przegladarka.generuj(wydruki, wynik, sciezka_przegladarki, link_raportu="raport_ekg.html")
 
     print()
     print(f"  Średnie tętno:        {wynik.tetno:.0f}/min")
@@ -54,8 +62,11 @@ def main():
     print(f"  Falowanie linii:      ~{wynik.czestotliwosc_dominujaca * 60:.0f}/min, {wynik.ocena_fal}")
     print(f"  Wniosek:              {raport.WNIOSKI[wynik.wniosek][1]}")
     print()
-    print(f"Raport: {wyjscie}")
+    print(f"Przeglądarka wykresu: {sciezka_przegladarki}")
+    print(f"Raport z objaśnieniami: {sciezka_raportu}")
     print("To narzędzie edukacyjne - nie zastępuje oceny lekarza.")
+    if not args.nie_otwieraj:
+        webbrowser.open("file:///" + sciezka_przegladarki.replace(os.sep, "/"))
 
 
 if __name__ == "__main__":

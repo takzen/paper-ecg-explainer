@@ -20,8 +20,14 @@ Educational tool that reads a **scanned or photographed paper ECG**, checks the 
    rhythm, random segments suggest AF.
 5. **Analyzes atrial activity.** Cancels the average QRST complex and computes the spectrum of the
    remaining signal: dominant frequency and organization index (fibrillation vs. flutter waves).
-6. **Writes a plain-language report** with a glossary of ECG symbols, annotated charts on ECG-paper
-   style grids and synthetic "normal vs. AF" examples for comparison.
+6. **Opens an interactive ECG viewer** (`przegladarka_ekg.html`, single offline HTML file):
+   all 12 leads redrawn on an ECG-paper grid with anomalies marked directly on the trace:
+   irregular RR intervals, very short intervals, missing P-wave zones and individual f waves.
+   Hover any marker for a tooltip, click it (or an entry in the anomaly list) for a plain-language
+   explanation and "what normal looks like", zoom in, step through anomalies with ← / →, and overlay
+   the original scan to verify the digitization.
+7. **Writes a plain-language report** (`raport_ekg.html`) with a glossary of ECG symbols, annotated
+   charts and synthetic "normal vs. AF" examples for comparison.
 
 ## Usage
 
@@ -40,10 +46,11 @@ By default the tool expects the common 3-row × 2-column printout (e.g. AsCARD):
 Other layouts can be named explicitly:
 
 ```bash
-python ekg_analiza.py scan.jpg --odprowadzenia "I,II,III,aVR,aVL,aVF" -o report.html
+python ekg_analiza.py scan.jpg --odprowadzenia "I,II,III,aVR,aVL,aVF" -o results_folder
 ```
 
-The report (`raport_ekg.html`) is saved next to the first scan unless `-o` is given.
+Both HTML files are saved next to the first scan (or into the folder given with `-o`) and the viewer
+opens in the browser automatically (`--nie-otwieraj` disables that).
 
 ## Project layout
 
@@ -54,6 +61,7 @@ The report (`raport_ekg.html`) is saved next to the first scan unless `-o` is gi
 | `analiza.py`       | QRS detection, RR irregularity, P waves, atrial spectrum |
 | `wykresy.py`       | charts drawn on ECG-paper style grids                  |
 | `raport.py`        | HTML report with plain-language explanations           |
+| `przegladarka.py`  | builds the interactive viewer from `przegladarka.html` |
 
 ## Limitations
 
